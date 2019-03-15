@@ -1,4 +1,7 @@
 data/raw/train.csv
 data/raw/test.csv
 data/raw/sampleSubmission.csv
+data/raw/train.csv.zip
+data/raw/test.csv.zip
+data/raw/sampleSubmission.csv.zip
 notebooks/.ipynb_checkpoints
