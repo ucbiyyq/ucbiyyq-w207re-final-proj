@@ -1,1 +1,18 @@
-PLACEHOLDER W207 final project with Arthur Lima, Linda Dong, and Yang Yang Qian
+# MIDS W207 final project
+
+DATASCI W207 Applied Machine Learning, Section 6
+
+## About
+
+San Francisco Crime Classification
+
+https://www.kaggle.com/c/sf-crime/data
+
+## Project Members
+
+* Arthur Lima
+* Linda Dong
+* and Yang Yang Qian
+
+
+
