@@ -1,4 +1,4 @@
 data/raw/train.csv
 data/raw/test.csv
 data/raw/sampleSubmission.csv
-notebooks/.ipynb_checkpoints/*
+notebooks/.ipynb_checkpoints
