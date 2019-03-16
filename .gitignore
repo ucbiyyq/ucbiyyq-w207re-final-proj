@@ -4,4 +4,5 @@ data/raw/sampleSubmission.csv
 data/raw/train.csv.zip
 data/raw/test.csv.zip
 data/raw/sampleSubmission.csv.zip
+data/processed
 notebooks/.ipynb_checkpoints
