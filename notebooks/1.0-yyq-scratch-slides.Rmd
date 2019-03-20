@@ -1,0 +1,68 @@
+---
+title: "Experiment with Slides"
+output: ioslides_presentation
+---
+
+```{r setup, include = FALSE}
+library(reticulate)
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(pander)
+```
+
+
+
+
+
+# About
+
+Test of creating slides from R markdown file
+
+see
+
+* https://nbconvert.readthedocs.io/en/latest/usage.html
+* https://janakiev.com/til/creating-slides-with-jupyter-notebook/
+
+```{r, include = FALSE}
+train <- readr::read_csv("../data/raw/train.csv.zip")
+```
+
+
+# Slide 1
+
+## header 1
+
+Here is the first 5 examples from train
+
+```{r}
+train %>% 
+    head() %>% 
+    pander()
+```
+
+
+---
+
+We note that there seems to be an outlier in terms of location
+
+```{r}
+train %>% 
+    ggplot(aes(x = X, y = Y)) +
+    geom_point()
+```
+
+---
+
+If we filter out the outlier, the plot improves, somewhat. It starts to kind of look like a city.
+
+```{r}
+train %>% 
+    filter(Y < 50) %>% 
+    ggplot(aes(x = X, y = Y)) +
+    geom_point()
+```
+
+---
+
+![My Image](../reports/figures/submission-20190316-baseline.PNG)
