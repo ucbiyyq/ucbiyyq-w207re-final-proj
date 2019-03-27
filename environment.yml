@@ -1,0 +1,7 @@
+name: w207re-final-proj
+dependencies:
+  - cookiecutter
+  - matplotlib
+  - numpy
+  - pandas
+  - scikit-learn
