@@ -113,8 +113,9 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         X["year_delta"] = add_delta(dtt, "Y") # year since start, 0 to 12
         
         X["hour_of_day"] = dtt.dt.hour # 0 to 23
+        X["day_of_week"] = dtt.dt.dayofweek # 0 to 7, note day name is already DayOfWeek
         X["day_of_month"] = dtt.dt.day # 1 to 31
-        # day_of_week is already available as DayOfWeek
+        X["day_of_year"] = dtt.dt.dayofyear # 1 to 365
         X["week_of_year"] = dtt.dt.week # 2 to 52
         X["month_of_year"] = dtt.dt.month # 1 to 12
         X["quarter_of_year"] = dtt.dt.quarter # 1 to 4
@@ -123,7 +124,20 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         X["is_weekend"] = dtt.dt.dayofweek // 5 # 1 if sat or sun, 0 otherwise
         X["is_holiday"] = calc_is_holiday(dtt) # 1 if holiday, 0 otherwise
         
+        # calculate cyclical values for hours, etc
+        # http://blog.davidkaleko.com/feature-engineering-cyclical-features.html
+        X["hour_of_day_sin"] = np.round( np.sin(dtt.dt.hour * (2. * np.pi / 24)), 3)
+        X["hour_of_day_cos"] = np.round( np.cos(dtt.dt.hour * (2. * np.pi / 24)), 3)
+        
+        X["day_of_week_sin"] = np.round( np.sin(dtt.dt.dayofweek * (2. * np.pi / 7)), 3)
+        X["day_of_week_cos"] = np.round( np.cos(dtt.dt.dayofweek * (2. * np.pi / 7)), 3)
+        
+        X["month_of_year_sin"] = np.round( np.sin((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
+        X["month_of_year_cos"] = np.round( np.cos((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
+        
         # TODO calculate police shifts? apparently its not regularly-spaced shifts
+        
+        
         
         return X
 
@@ -133,14 +147,46 @@ def print_summary(df):
     
     """
     # to summarize by counting
-    cats = ["Category", "DayOfWeek", "PdDistrict", "is_weekend", "is_holiday"]
+    cats = ["Category"
+            , "hour_of_day"
+            , "day_of_week"
+            , "DayOfWeek"
+            , "day_of_month"
+            , "day_of_year"
+            , "week_of_year"
+            , "month_of_year"
+            , "quarter_of_year"
+            , "year"
+            , "is_weekend"
+            , "is_holiday"
+            , "PdDistrict"
+            ]
     
     # to summarize by describe
-    nums = ["Dates", "X", "Y"
-            , "hour_delta", "day_delta", "week_delta", "month_delta", "year_delta"
-            , "hour_of_day", "day_of_month", "week_of_year", "month_of_year", "quarter_of_year", "year"] 
+    nums = ["X", "Y"
+            , "Dates"
+            , "hour_delta"
+            , "day_delta"
+            , "week_delta"
+            , "month_delta"
+            , "year_delta"
+            , "hour_of_day"
+            , "day_of_week"
+            , "day_of_month"
+            , "day_of_year"
+            , "week_of_year"
+            , "month_of_year"
+            , "quarter_of_year"
+            , "year"
+            , "hour_of_day_sin"
+            , "hour_of_day_cos"
+            , "day_of_week_sin"
+            , "day_of_week_cos"
+            , "month_of_year_sin"
+            , "month_of_year_cos"
+            ] 
     
-    # messy, can't really summarize
+    # messy, can't really summarize, so just print a sample
     miscs = ["Descript", "Resolution", "Address"]
     
     print("============")
