@@ -104,6 +104,13 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
             res = dt.isin(holidays).astype("int")
             return res
         
+        def calc_is_latenight(dtt):
+            hrs = dtt.dt.hour
+            res = np.ones(shape = hrs.shape)
+            res[(hrs > 7) & (hrs < 20)] = 0
+            res = res.astype("int")
+            return res
+        
         # creates a copy of the input dataframe
         X_out = X.copy()
         
@@ -139,6 +146,8 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         X_out["month_of_year_sin"] = np.round( np.sin((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
         X_out["month_of_year_cos"] = np.round( np.cos((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
         
+        X_out["is_latenight"] = calc_is_latenight(dtt) # 1 if after 8 pm and before 6 am, 0 otherwise
+        
         # TODO calculate police shifts? apparently its not regularly-spaced shifts
         
         # TODO calculate address-based features, such as street, intersection, etc
@@ -146,6 +155,22 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         # TODO calculate distance from hotspots of crime
         
         return X_out
+
+def prep_submissions(predsproba, categories):
+    """
+    Helper function to prepare the raw predsproba array into a panda with the correct column headers and an index
+    """
+    cols = np.sort(pd.unique(categories))
+    submissions = pd.DataFrame(data = predsproba, columns = cols)
+    
+    # rounds any floats to less precision
+    submissions= submissions[cols].round(2)
+    
+    # adds an Id column
+    idx = np.arange(0, len(predsproba))
+    submissions.insert(loc = 0, column = "Id", value = idx.tolist())
+    return(submissions)
+
 
 def print_summary(df):
     """
@@ -166,6 +191,7 @@ def print_summary(df):
             , "is_weekend"
             , "is_holiday"
             , "PdDistrict"
+            , "is_latenight"
             ]
     
     # to summarize by describe
