@@ -2,6 +2,10 @@ import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from pandas.tseries.holiday import USFederalHolidayCalendar
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import OneHotEncoder
 
 """
 Module of helper classes and functions to build features.
@@ -72,9 +76,22 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
     See Chap 2 custom transformers
     
     """
-    def __init__(self, holiday_calendar = USFederalHolidayCalendar(), latitude_outlier = 50):
+    def __init__(self
+                 , holiday_calendar = USFederalHolidayCalendar()
+                 , not_latenight = (7, 20)
+                 , geo_fence = (-122.51365, -122.25000, 37.70787, 50.00000)
+                 ):
+        """
+        constructor for the SFCCTransformer
+        
+        can pass in some params:
+            holiday_calendar, which holiday calendar to use for is_holiday; default US Federal
+            not_latenight, hour of day that is NOT late night; default 7 am to 8 pm
+            geo_fence, sf city limits, any record with X or Y outside limit has X and Y set to NA, so that they can be imputed later on; min long X, max long X, min lat Y, max lat Y; default (-122.51365, -122.25000, 37.70787, 50.00000)
+        """
         self.holiday_calendar = holiday_calendar
-        self.latitude_outlier = latitude_outlier
+        self.not_latenight = not_latenight
+        self.geo_fence = geo_fence
         
     def fit(self, X, y = None):
         return self # no fitting
@@ -107,12 +124,15 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         def calc_is_latenight(dtt):
             hrs = dtt.dt.hour
             res = np.ones(shape = hrs.shape)
-            res[(hrs > 7) & (hrs < 20)] = 0
+            res[(hrs > self.not_latenight[0]) & (hrs < self.not_latenight[1])] = 0
             res = res.astype("int")
             return res
         
         # creates a copy of the input dataframe
         X_out = X.copy()
+        
+        # sets any X or Y that is outside geo fence limits to NaN, for later imputation
+        X_out.loc[(X_out["X"] < self.geo_fence[0]) | (X_out["X"] > self.geo_fence[1]) | (X_out["Y"] < self.geo_fence[2]) | (X_out["Y"] > self.geo_fence[3]), ["X", "Y"]] = np.nan
         
         # extracts various date-related features
         dtt = pd.to_datetime(X_out.Dates)
@@ -134,6 +154,7 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         
         X_out["is_weekend"] = dtt.dt.dayofweek // 5 # 1 if sat or sun, 0 otherwise
         X_out["is_holiday"] = calc_is_holiday(dtt) # 1 if holiday, 0 otherwise
+        X_out["is_latenight"] = calc_is_latenight(dtt) # 1 if after 8 pm and before 6 am, 0 otherwise
         
         # calculate cyclical values for hours, etc
         # http://blog.davidkaleko.com/feature-engineering-cyclical-features.html
@@ -143,18 +164,113 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         X_out["day_of_week_sin"] = np.round( np.sin(dtt.dt.dayofweek * (2. * np.pi / 7)), 3)
         X_out["day_of_week_cos"] = np.round( np.cos(dtt.dt.dayofweek * (2. * np.pi / 7)), 3)
         
+        X_out["day_of_month_sin"] = np.round( np.sin(dtt.dt.dayofweek * (2. * np.pi / 31)), 3)
+        X_out["day_of_month_cos"] = np.round( np.cos(dtt.dt.dayofweek * (2. * np.pi / 31)), 3)
+        
+        X_out["day_of_year_sin"] = np.round( np.sin(dtt.dt.dayofweek * (2. * np.pi / 366)), 3)
+        X_out["day_of_year_cos"] = np.round( np.cos(dtt.dt.dayofweek * (2. * np.pi / 366)), 3)
+        
+        X_out["week_of_year_sin"] = np.round( np.sin(dtt.dt.dayofweek * (2. * np.pi / 53)), 3)
+        X_out["week_of_year_cos"] = np.round( np.cos(dtt.dt.dayofweek * (2. * np.pi / 53)), 3)
+        
         X_out["month_of_year_sin"] = np.round( np.sin((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
         X_out["month_of_year_cos"] = np.round( np.cos((dtt.dt.month - 1) * (2. * np.pi / 12)), 3)
         
-        X_out["is_latenight"] = calc_is_latenight(dtt) # 1 if after 8 pm and before 6 am, 0 otherwise
-        
-        # TODO calculate police shifts? apparently its not regularly-spaced shifts
+        X_out["quarter_of_year_sin"] = np.round( np.sin((dtt.dt.month - 1) * (2. * np.pi / 4)), 3)
+        X_out["quarter_of_year_cos"] = np.round( np.cos((dtt.dt.month - 1) * (2. * np.pi / 4)), 3)
         
         # TODO calculate address-based features, such as street, intersection, etc
+        # might be better to do this in prep_data with CountVectorizer or something
         
         # TODO calculate distance from hotspots of crime
         
         return X_out
+
+def shuffle_split_data(df, is_test = False):
+    """
+    Helper function to shuffle and split train data into a Dataframe of data, and a Series of labels
+    
+    Can also be used for the test data if the is_test flag is set to true
+    
+    i.e.
+        1. given train_pd or test_pd
+        2. shuffles dataframe
+        3. splits into data (and labels)
+    """
+    shuffled = df.sample(frac = 1, random_state = 0)
+    data = shuffled
+    labels = pd.Series([])
+    if is_test:
+        pass
+    else:
+        labels = data["Category"]
+        data = data.drop(["Category", "Descript", "Resolution"], axis = 1)
+    return data, labels
+
+def prep_data(data, feat_nums, feat_cat, feat_binary, feat_text):
+    """
+    Helper function to prepare the train and test data. 
+    Uses the other classes in this module, along with pipelines, to convert features.
+    
+    params
+        feat_nums, list of numeric feature names, i.e. X, Y, hour_of_day_sin, hour_of_day_cos ...
+        feat_cat, list of categorical feature names, i.e. DayOfWeek, PdDistrict, ...
+        feat_binary, list of binary feature names, i.e. is_weekend, is_latenight, ...
+        feat_text, list of text feature names, i.e. Address
+    
+    i.e.
+        1. extracts basic features from data, with SFCCTransformer
+        2. splits data into numeric, categorical, binary, and text features
+        3. for numerics, runs through imputer and scaler
+        4. for categorical, runs through onehot encoding
+        5. for binary, doesn't do anything extra
+        6. for text, converts to term frequency (TODO)
+        7. then unions everything into one dataframe
+    """
+    
+    # extracts some new basic attributes from the existing attributes
+    sfcc = SFCCTransformer()
+    pipe = Pipeline([
+        ("transformer", sfcc)
+    ])
+    data = pipe.transform(data)
+    
+    # splits into numeric, categorical, text dataframes, so we that can feed them through different pipelines
+    
+    # feeds numeric features into pipeline that has
+    # SimpleImputer (median), to fill in any missing values (esp the X and Y)
+    # and MinMaxScaler so that they will have similar scale to our other features
+    imputer = SimpleImputer(missing_values = np.nan, strategy = "median")
+    scaler = MinMaxScaler()
+    pipe_num = Pipeline([
+        ("imputer", imputer),
+        ("scaler", scaler)
+    ])
+    data_num = data[feat_nums]
+    data_num_out = pipe_num.fit_transform(data_num)
+    data_num_out = pd.DataFrame(data_num_out, columns = data_num.columns)
+    
+    # feeds categorical features into pipeline, which has
+    # OneHotEncoder, which will turn the categorical features into 1 or 0 per level
+    one_hot = OneHotEncoder(sparse = False)
+    pipe_cat = Pipeline([
+        ("encoder", one_hot)
+    ])
+    data_cat = data[feat_cat]
+    data_cat_out = pipe_cat.fit_transform(data_cat)
+    data_cat_cols = np.concatenate(one_hot.categories_).ravel().tolist()
+    data_cat_out = pd.DataFrame(data_cat_out, columns = data_cat_cols)
+    
+    # don't need to do anything to prepare the binary features
+    data_binary_out = data[feat_binary]
+    
+    # feeds text features into pipeline, which as
+    # TODO find out how to use count vectorizer here
+#     feat_text
+
+    result = pd.concat([data_num_out, data_cat_out, data_binary_out], axis = 1, sort = False)
+    
+    return result
 
 def prep_submissions(predsproba, categories):
     """
@@ -170,7 +286,6 @@ def prep_submissions(predsproba, categories):
     idx = np.arange(0, len(predsproba))
     submissions.insert(loc = 0, column = "Id", value = idx.tolist())
     return(submissions)
-
 
 def print_summary(df):
     """
@@ -214,8 +329,16 @@ def print_summary(df):
             , "hour_of_day_cos"
             , "day_of_week_sin"
             , "day_of_week_cos"
+            , "day_of_month_sin"
+            , "day_of_month_cos"
+            , "day_of_year_sin"
+            , "day_of_year_cos"
+            , "week_of_year_sin"
+            , "week_of_year_cos"
             , "month_of_year_sin"
             , "month_of_year_cos"
+            , "quarter_of_year_sin"
+            , "quarter_of_year_cos"
             ] 
     
     # messy, can't really summarize, so just print a sample
