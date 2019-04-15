@@ -402,20 +402,28 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         
         return X_out
 
-def prep_data(train_pd, test_pd, rs = 0):
+def prep_data(train_pd, test_pd, dev_size = 0, rs = 0):
     """
     Helper function to shuffle and separate the train, labels, test data, and test ids
+    
+    params
+        train_pd, the train data set as a dataframe
+        test_pd, the test data set as a dataframe
+        dev_size, the fraction of the train data to split into a dev set, default 0
+        rs, the random seed used to reproduce any shuffles
     """
     # note, we don't need a dev set since we will be using cross validation
-    train_data, _ = train_test_split(train_pd, test_size = 0, shuffle = True, random_state = rs)
+    train_data, dev_data = train_test_split(train_pd, test_size = dev_size, shuffle = True, random_state = rs)
     train_labels = train_data.Category
+    dev_labels = dev_data.Category
     train_data = train_data.drop(["Category", "Descript", "Resolution"], axis = 1)
+    dev_data = dev_data.drop(["Category", "Descript", "Resolution"], axis = 1)
     
     test_data, _ = train_test_split(test_pd, test_size = 0, shuffle = True, random_state = rs)
     test_ids = test_data.Id
     test_data = test_data.drop(["Id"], axis = 1)
     
-    return train_data, train_labels, test_data, test_ids
+    return train_data, train_labels, dev_data, dev_lables, test_data, test_ids
 
 def prep_submissions(predsproba, categories, ids):
     """
