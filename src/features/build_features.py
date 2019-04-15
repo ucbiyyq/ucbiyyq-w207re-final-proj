@@ -423,7 +423,7 @@ def prep_data(train_pd, test_pd, dev_size = 0, rs = 0):
     test_ids = test_data.Id
     test_data = test_data.drop(["Id"], axis = 1)
     
-    return train_data, train_labels, dev_data, dev_lables, test_data, test_ids
+    return train_data, train_labels, dev_data, dev_labels, test_data, test_ids
 
 def prep_submissions(predsproba, categories, ids):
     """
