@@ -38,14 +38,18 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         train_prepared = num_pipeline.transform(train_pd)
         
     """
-    def __init__(self, attribute_names): 
-        self.attribute_names = attribute_names 
+    def __init__(self, attribute_names, as_df = False): 
+        self.attribute_names = attribute_names
+        self.as_df = as_df
         
     def fit(self, X, y = None): 
         return self 
     
     def transform(self, X): 
-        return X[self.attribute_names].values
+        out = X[self.attribute_names].values
+        if (self.as_df):    
+            out = pd.DataFrame(out, columns = self.attribute_names)
+        return out
 
 class MyTransformer(BaseEstimator, TransformerMixin):
     """
@@ -97,7 +101,6 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                  , dates_ordinal = False
                  , dates_onehot = True
                  , dates_cyclical = True
-                 , address_vectorize = True
                  ):
         """
         constructor for the SFCCTransformer
@@ -123,7 +126,6 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 how to handle records with X or Y outside of the geo_fence
                 identity = keep the X or Y values the same
                 imputer = uses the imputer to fill in, i.e. median
-                centroid = sets as centroid of all crime within fence
                 default imputer
                 
             pddistrict_drop
@@ -136,7 +138,8 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 if true, drops the Dates feature after it has been converted
                 default true
             address_drop
-                if true, dops the Address feature after it has been converted
+                if true, drops the Address feature
+                note, this transformer does NOT convert the Address features
                 default true
                 
             pddistrict_onehot
@@ -181,7 +184,6 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
         self.dates_ordinal = dates_ordinal
         self.dates_onehot = dates_onehot
         self.dates_cyclical = dates_cyclical
-        self.address_vectorize = address_vectorize
         
         
     def fit(self, X, y = None):
@@ -195,7 +197,6 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
             2. for numerics, runs through imputer and scaler, depending on flags
             3. for categorical, runs through onehot encoding, depending on flags
             4. for binary, doesn't do anything extra
-            5. for text, converts to term frequency (TODO)
         
         output is one combined dataframe, dense format
         """
@@ -280,10 +281,8 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 pass
             elif (geo_strategy == "imputer"):
                 # sets any X that is outside geo fence limits to NaN, for imputation
+                # if imputer uses median, is basically same as the centroid of all crime
                 coord_out[(coord_out < mn) | (coord_out > mx)] = np.nan
-            elif (geo_strategy == "centroid"):
-                # TODO implement a centroid geo_strategy
-                pass
             else:
                 raise Exception("unexpected geo_strategy!", geo_strategy)
             return coord_out
@@ -393,15 +392,76 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 # does not make sense for year to be cyclical
         
         if ("Address" in X_out.columns):
-            if (self.address_vectorize):
-                # TODO calculate address-based features, such as street, intersection, etc
-                # might be better to do this in prep_data with CountVectorizer or something
-                pass
-                if (self.address_drop):
-                    X_out = X_out.drop(["Address"], axis = 1)
+            # adds binary is_intersection features
+            X_out["is_intersection"] = 0
+            X_out.loc[X_out["Address"].str.contains("/", regex = False), "is_intersection"] = 1
+            
+            if (self.address_drop):
+                X_out = X_out.drop(["Address"], axis = 1)
         
+        # saves the feature names
+        self.feature_names = np.asarray(list(X_out.columns))
         return X_out
+        
+    def get_feature_names(self):
+        return self.feature_names
 
+class SFCCAddressTransformer(BaseEstimator, TransformerMixin):
+    """
+    Helper class for our SanFrancisco Crime Classification project.
+    
+    note, this transformer does NOT convert the Address features, just prepares it for onehot encoding
+    
+    Focused on cleaning and transforming Address into various features.
+    
+    """
+    def __init__(self
+        , address_drop = False
+    ):
+        """
+        address_drop
+                if true, drops the Address feature
+                default false
+        """
+        self.address_drop = address_drop
+        
+    def fit(self, X, y = None):
+        return self # no fitting
+    
+    def transform(self, X, y = None):
+        """
+        Creates new features based on Address
+        
+            1. extracts basic features from Address
+            2. converts various streets and intersections
+        
+        output is one combined dataframe, dense format
+        """
+        
+        # creates a copy of the input dataframe
+        X_out = X.copy()
+        # TODO test if need to reset index???
+        
+        if ("Address" in X_out.columns):
+            
+            # fixes the four addresses that are intersections but only appears to have 1 street
+            X_out["streets"] = X_out["Address"]
+            X_out.loc[X_out["streets"].str.endswith("/"), "streets"] = X_out["Address"].str[:-2]
+            
+            # converts the addresses into just the streets, for the "block of" addresses 
+            streets = X_out["streets"].str.split("Block of ", expand = True)
+            X_out.loc[X_out["streets"].str.contains("Block of "), "streets"] = streets[1]
+        
+            if (self.address_drop):
+                X_out = X_out.drop(["Address"], axis = 1)
+        
+        # saves the feature names
+        self.feature_names = np.asarray(list(X_out.columns))
+        return X_out
+    
+    def get_feature_names(self):
+        return self.feature_names
+        
 def prep_data(train_pd, test_pd, dev_size = 0, rs = 0):
     """
     Helper function to shuffle and separate the train, labels, test data, and test ids
@@ -520,3 +580,16 @@ def print_summary(df):
         except KeyError:
             print(m, "not in dataframe")
         
+def translate_sparse(ks, features):
+    """
+    Helper function, given a sparse array of features, 
+    and an array of all features, 
+    returns a dataframe of the transpose of the sparse array and feature names
+    
+    assumes given sparse array is only 1 row
+    """
+    if (ks.shape[0] > 1):
+        raise Exception("should only have 1 row in ks, actually has shape", ks.shape)
+    cols = features[ks.indices]
+    out = pd.DataFrame(np.transpose([ks.indices, cols, ks.data]), columns = ["feature_index", "feature_name", "value"])
+    return out
