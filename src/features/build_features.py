@@ -38,7 +38,7 @@ class DataFrameSelector(BaseEstimator, TransformerMixin):
         train_prepared = num_pipeline.transform(train_pd)
         
     """
-    def __init__(self, attribute_names, as_df = False): 
+    def __init__(self, attribute_names = [], as_df = False): 
         self.attribute_names = attribute_names
         self.as_df = as_df
         
@@ -96,7 +96,7 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                  
                  , pddistrict_onehot = True
                  , dayofweek_onehot = True
-                 , dates_deltas = True
+                 , dates_deltas = False
                  , dates_binary = True
                  , dates_ordinal = False
                  , dates_onehot = True
@@ -150,7 +150,7 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 default true
             dates_deltas
                 if true, includes various date-as-deltas features
-                default true
+                default false
             dates_binary
                 if true, includes various date-as-binary features
                 default true
@@ -327,11 +327,12 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 X_out = X_out.drop(["Dates"], axis = 1)
             
             if (self.dates_deltas):
-                X_out["hour_delta"] = process_numerics(add_delta(dtt, "h"), self.imputer, self.scaler, rd = 6) # hour since start, 0 to 108263
-                X_out["day_delta"] = process_numerics(add_delta(dtt, "D"), self.imputer, self.scaler, rd = 4) # day since start, 0 to 4510
-                X_out["week_delta"] = process_numerics(add_delta(dtt, "W"), self.imputer, self.scaler) # week since start, 0 to 644
-                X_out["month_delta"] = process_numerics(add_delta(dtt, "M"), self.imputer, self.scaler) # month since start, 0 to 148
-                X_out["year_delta"] = process_numerics(add_delta(dtt, "Y"), self.imputer, self.scaler) # year since start, 0 to 12
+                # X_out["hour_delta"] = process_numerics(add_delta(dtt, "h"), self.imputer, self.scaler, rd = 6) # hour since start, 0 to 108263
+                # X_out["day_delta"] = process_numerics(add_delta(dtt, "D"), self.imputer, self.scaler, rd = 4) # day since start, 0 to 4510
+                # X_out["week_delta"] = process_numerics(add_delta(dtt, "W"), self.imputer, self.scaler) # week since start, 0 to 644
+                # X_out["month_delta"] = process_numerics(add_delta(dtt, "M"), self.imputer, self.scaler) # month since start, 0 to 148
+                # X_out["year_delta"] = process_numerics(add_delta(dtt, "Y"), self.imputer, self.scaler) # year since start, 0 to 12
+                pass
             
             if (self.dates_binary):
                 X_out["is_weekend"] = dtt.dt.dayofweek // 5 # 1 if sat or sun, 0 otherwise
@@ -339,14 +340,15 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 X_out["is_latenight"] = calc_is_latenight(dtt) # 1 if after 8 pm and before 6 am, 0 otherwise
             
             if (self.dates_ordinal):
-                X_out["hour_of_day"] = dtt.dt.hour # 0 to 23
-                X_out["day_of_week"] = dtt.dt.dayofweek # 0 to 7, note day name is already DayOfWeek
-                X_out["day_of_month"] = dtt.dt.day # 1 to 31
-                X_out["day_of_year"] = dtt.dt.dayofyear # 1 to 365
-                X_out["week_of_year"] = dtt.dt.week # 2 to 52
-                X_out["month_of_year"] = dtt.dt.month # 1 to 12
-                X_out["quarter_of_year"] = dtt.dt.quarter # 1 to 4
-                X_out["year"] = dtt.dt.year # 2003 to 2015
+                # X_out["hour_of_day"] = dtt.dt.hour # 0 to 23
+                # X_out["day_of_week"] = dtt.dt.dayofweek # 0 to 7, note day name is already DayOfWeek
+                # X_out["day_of_month"] = dtt.dt.day # 1 to 31
+                # X_out["day_of_year"] = dtt.dt.dayofyear # 1 to 365
+                # X_out["week_of_year"] = dtt.dt.week # 2 to 52
+                # X_out["month_of_year"] = dtt.dt.month # 1 to 12
+                # X_out["quarter_of_year"] = dtt.dt.quarter # 1 to 4
+                # X_out["year"] = dtt.dt.year # 2003 to 2015
+                pass
             
             if (self.dates_onehot):
                 # hour of day
@@ -361,9 +363,9 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 # DO NOT USE, appears to crash laptop
                 #oh = process_onehot(dtt.dt.dayofyear.astype(int), "doy_")
                 #X_out = pd.concat([X_out, oh], axis = 1, join_axes=[X_out.index])
-                # week of year
-                oh = process_onehot(dtt.dt.weekofyear.astype(int), "woy_")
-                X_out = pd.concat([X_out, oh], axis = 1, join_axes=[X_out.index])
+                # week of year, exclude because train and test switch off by week
+                # oh = process_onehot(dtt.dt.weekofyear.astype(int), "woy_")
+                # X_out = pd.concat([X_out, oh], axis = 1, join_axes=[X_out.index])
                 # month of year
                 oh = process_onehot(dtt.dt.quarter.astype(int), "qoy_")
                 X_out = pd.concat([X_out, oh], axis = 1, join_axes=[X_out.index])
@@ -383,8 +385,8 @@ class SFCCTransformer(BaseEstimator, TransformerMixin):
                 X_out["day_of_month_cos"] = process_numerics(np.cos((dtt.dt.day - 1) * (2. * np.pi / 31)), self.imputer, self.scaler)
                 X_out["day_of_year_sin"] = process_numerics(np.sin((dtt.dt.dayofyear - 1) * (2. * np.pi / 366)), self.imputer, self.scaler)
                 X_out["day_of_year_cos"] = process_numerics(np.cos((dtt.dt.dayofyear - 1) * (2. * np.pi / 366)), self.imputer, self.scaler)
-                X_out["week_of_year_sin"] = process_numerics(np.sin((dtt.dt.weekofyear - 1) * (2. * np.pi / 53)), self.imputer, self.scaler)
-                X_out["week_of_year_cos"] = process_numerics(np.cos((dtt.dt.weekofyear - 1) * (2. * np.pi / 53)), self.imputer, self.scaler)
+                # X_out["week_of_year_sin"] = process_numerics(np.sin((dtt.dt.weekofyear - 1) * (2. * np.pi / 53)), self.imputer, self.scaler)
+                # X_out["week_of_year_cos"] = process_numerics(np.cos((dtt.dt.weekofyear - 1) * (2. * np.pi / 53)), self.imputer, self.scaler)
                 X_out["month_of_year_sin"] = process_numerics(np.sin((dtt.dt.month - 1) * (2. * np.pi / 12)), self.imputer, self.scaler)
                 X_out["month_of_year_cos"] = process_numerics(np.cos((dtt.dt.month - 1) * (2. * np.pi / 12)), self.imputer, self.scaler)
                 X_out["quarter_of_year_sin"] = process_numerics(np.sin((dtt.dt.quarter - 1) * (2. * np.pi / 4)), self.imputer, self.scaler)
@@ -466,14 +468,18 @@ def prep_data(train_pd, test_pd, dev_size = 0, rs = 0):
     """
     Helper function to shuffle and separate the train, labels, test data, and test ids
     
+    Note, because of our class inbalance, does a stratified split using the Category
+    
     params
         train_pd, the train data set as a dataframe
         test_pd, the test data set as a dataframe
         dev_size, the fraction of the train data to split into a dev set, default 0
         rs, the random seed used to reproduce any shuffles
     """
-    # note, we don't need a dev set since we will be using cross validation
-    train_data, dev_data = train_test_split(train_pd, test_size = dev_size, shuffle = True, random_state = rs)
+    if (dev_size == 0):
+        train_data, dev_data = train_test_split(train_pd, test_size = dev_size, shuffle = True, random_state = rs)
+    else:
+        train_data, dev_data = train_test_split(train_pd, test_size = dev_size, shuffle = True, random_state = rs, stratify = train_pd.Category)
     train_labels = train_data.Category
     dev_labels = dev_data.Category
     train_data = train_data.drop(["Category", "Descript", "Resolution"], axis = 1)
