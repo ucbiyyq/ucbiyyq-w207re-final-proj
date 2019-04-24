@@ -1,7 +1,17 @@
 name: w207re-final-proj
+channels:
+  - anaconda
+  - conda-forge
+  - defaults
 dependencies:
-  - cookiecutter
-  - matplotlib
-  - numpy
-  - pandas
-  - scikit-learn
+  - cookiecutter=1.6.0=py36_1000
+  - matplotlib=3.0.3=py36_0
+  - numpy=1.16.2=py36h19fb1c0_0
+  - pandas=0.24.2=py36h6538335_0
+  - python=3.6.7=he025d50_1004
+  - scikit-learn=0.20.3=py36h343c172_0
+  - seaborn=0.9.0=py36_0
+  - pip:
+    - kaggle==1.5.3
+prefix: C:\Users\yangyq\Anaconda3\envs\w207re-final-proj
+

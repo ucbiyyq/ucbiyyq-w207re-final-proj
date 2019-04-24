@@ -12,7 +12,4 @@ https://www.kaggle.com/c/sf-crime/data
 
 * Arthur Lima
 * Linda Dong
-* and Yang Yang Qian
-
-
-
+* Yang Yang Qian
